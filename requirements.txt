@@ -1,0 +1,7 @@
+langchain
+langchain-community
+sqlalchemy
+langchain-google-genai
+instructor
+pandas
+streamlit
