@@ -117,7 +117,7 @@ db = initSqliteDBLangchain()
 def initSqliteConn(dbName ="mydb.db"):
     try:
         print("connecting to DB...")
-        conn = sqlite3.connect(database=dbName)
+        conn = sqlite3.connect(database=dbName, check_same_thread=False)
         print("Connection established with db:", dbName)
         return conn
     except Exception as e:
@@ -195,6 +195,56 @@ def runQueryDf(query="select yo from bro"):
 df = runQueryDf(validatorResponse.query)
 df
 conn  = initSqliteConn()
+
+cursor = conn.cursor()
+import sqlite3
+
+# Step 1: Connect to the SQLite database (use ':memory:' for an in-memory DB)
+conn = sqlite3.connect('./mydb.db')
+
+# Step 2: Create a cursor object
+cursor = conn.cursor()
+
+# Step 3: Get all table names
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = cursor.fetchall()
+tables
+# Step 4: Function to format schema for LLM
+def format_schema_for_llm(table_name, schema):
+    formatted_schema = f"Schema for table '{table_name}':\n"
+    for column in schema:
+        col_name = column[1]
+        col_type = column[2]
+        not_null = "not nullable" if column[3] else "nullable"
+        default_val = f"with default value {column[4]}" if column[4] is not None else "without a default value"
+        primary_key = "primary key" if column[5] else "not a primary key"
+
+        if column[5]:
+            formatted_schema+=f"Column '{col_name}' is of type {col_type}, and is {primary_key}.\n"
+        else:
+            formatted_schema+=f"Column '{col_name}' is of type {col_type}\n"
+    
+    return formatted_schema
+
+# Step 5: Get the schema for each table and format it for LLM context
+res = []
+for table_name in tables:
+    table = table_name[0]
+    cursor.execute(f"PRAGMA table_info({table});")
+    schema = cursor.fetchall()
+    
+    # Format the schema for LLM
+    formatted_schema = format_schema_for_llm(table, schema)
+    # print(formatted_schema)
+    res.append(formatted_schema)
+
+print("\n".join(res))
+res
+
+# Step 6: Close the connection
+conn.close()
+
+
 
 runQueryDf()
 # add result to messages as query_status

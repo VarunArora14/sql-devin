@@ -1,5 +1,4 @@
 import streamlit as st
-from langchain.vectorstores import FAISS    
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 from dotenv import load_dotenv
@@ -7,7 +6,7 @@ from langchain_community.embeddings.sentence_transformer import SentenceTransfor
 import instructor
 import google.generativeai as genai
 from typing import List
-from langchain_community.utilities import SQLDatabase
+import sqlite3
 
 
 # https://blog.streamlit.io/introducing-two-new-caching-commands-to-replace-st-cache/
@@ -39,13 +38,12 @@ def initConversationHistory():
     return conversation_history
 
 @st.cache_resource
-def initSqliteDBLangchain(dbName = "mydb.db"):
+def initSqliteConn(dbName ="mydb.db"):
     try:
         print("connecting to DB...")
-        dbUri = f"sqlite:///{dbName}"
-        db = SQLDatabase.from_uri(dbUri)
-        print("Connection established! Url:", dbUri)
-        return db
+        conn = sqlite3.connect(database=dbName, check_same_thread=False)
+        print("Connection established with db:", dbName)
+        return conn
     except Exception as e:
         print("Cannot establish connection to DB\nError:", str(e))
         return None
@@ -59,7 +57,7 @@ if "conversation_history" not in st.session_state:
     st.session_state["conversation_history"] = initConversationHistory()
 
 if "db_client" not in st.session_state:
-    db_client = initSqliteDBLangchain()
+    db_client = initSqliteConn()
     if not db_client:
         st.write("ERROR! DB not initialzied properly")
     st.session_state["db_client"] = db_client
