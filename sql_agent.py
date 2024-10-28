@@ -192,8 +192,8 @@ def runQueryDf(query="select yo from bro"):
         return str(e)
     return df
     
-df = runQueryDf(validatorResponse.query)
-df
+# df = runQueryDf(validatorResponse.query)
+# df
 conn  = initSqliteConn()
 
 cursor = conn.cursor()
@@ -207,6 +207,8 @@ cursor = conn.cursor()
 
 # Step 3: Get all table names
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+
+cursor.execute("drop table varun;")
 tables = cursor.fetchall()
 tables
 # Step 4: Function to format schema for LLM
@@ -250,3 +252,8 @@ runQueryDf()
 # add result to messages as query_status
 
 # TODO: if the user question is invalid then just give back response to user giving the error message. If query is invalid then add that to messages array to show the user what is the error message by sql server => use that as context with previous data and generate query again (Retries max_retries=3) If retries are over then simply show the last error message and allow user to enter, till then keep running the code
+
+
+conn = sqlite3.connect(database="mydb.db", check_same_thread=False)
+
+pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table';", conn)
