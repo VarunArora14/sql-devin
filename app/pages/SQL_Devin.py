@@ -38,7 +38,6 @@ else:
 class LLMResponse(BaseModel):
     query: str = Field("SQL query which is syntactically correct to run on SQL databases without any headers or comments")
     isValidResponse: bool = Field(description="False when the user question not related to querying data from SQL database or tables or tables or fields don't exist as questioned, True otherwise.")
-    shouldRunQuery: bool = Field(description="Set to True if user wants results from database/table or gives query to run. False if user only wants the query to be generated or query to be explained. Set to False if can't determine whether user wants to get results from database/table.")
     errorMessage: str = Field("Error message given by assistant  when user question not related to querying data or tries to modify data in tables")
 
 class QuestionClassificationResponse(BaseModel):
@@ -222,7 +221,6 @@ def generateFirstAnswer(conversation_history, db_client, user_question = "give i
         return LLMResponse(
             errorMessage=str(e),
             isValidResponse=False,
-            shouldRunQuery=False,
             query="NO QUERY GENERATED"
         )
 
@@ -294,7 +292,7 @@ def getLLMResponse(question:str):
     sql_query = validatedResponse.query
     markdown_response = None
     if validatedResponse.isValidResponse == False:
-        # TODO: show the error message
+        # TODO: show the error message2
         error_message = f"""
         ### Invalid Question
         
