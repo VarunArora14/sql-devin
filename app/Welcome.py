@@ -41,7 +41,8 @@ def initConversationHistory():
 def initSqliteConn(dbName ="mydb.db"):
     try:
         print("connecting to DB...")
-        conn = sqlite3.connect(database=dbName, check_same_thread=False)
+        # conn = sqlite3.connect(database=dbName, check_same_thread=False)
+        conn = sqlite3.connect('file:' + dbName + '?mode=ro', uri=True, check_same_thread=False)
         print("Connection established with db:", dbName)
         return conn
     except Exception as e:
@@ -91,11 +92,11 @@ st.markdown(
 
     ### 🚀 **How It Works:**
 
-    1. **Input your request in natural language**: Simply type in your intent, such as "Show me all employees in the Marketing department" or "Drop the Products table".
+    1. **Input your request in natural language**: Simply type in your intent, such as "Show me all employees in the Marketing department" or "Give top 5 records from music table".
     
     2. **SQL Devin processes your request**: The system will interpret your input and generate the SQL query corresponding to your request.
 
-    3. **Error Handling**: If the query fails, SQL Devin will analyze the error, regenerate the SQL query considering the error message, and provide a corrected query automatically.
+    # 3. **Error Handling**: If the query fails, SQL Devin will analyze the error, regenerate the SQL query considering the error message, and provide a corrected query automatically.
 
     ### 🛠️ **Get Started Now**:
 
@@ -104,14 +105,9 @@ st.markdown(
     - Let SQL Devin take care of the rest!
 
     #### Example Inputs:
-    - "Create a table named Customers with columns ID, Name, and Email."
+    - "Analyze the customer table and provide insights from it."
     - "Insert a new row into Customers with ID=1, Name='John Doe', and Email='john@example.com'."
     - "Delete all records where department is 'HR'."
-
-    #### Example Auto-Regeneration:
-    - Input: "Show me the salary for all employees."  
-    - Error: *"Column 'salary' not found in 'employees' table."*  
-    - SQL Devin: Automatically regenerates the query considering available columns, such as `wages` or `pay`.
 
     Start typing your query and let **SQL Devin** handle the SQL!
 

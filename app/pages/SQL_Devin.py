@@ -38,14 +38,77 @@ else:
 class LLMResponse(BaseModel):
     query: str = Field("SQL query which is syntactically correct to run on SQL databases without any headers or comments")
     isValidResponse: bool = Field(description="False when the user question not related to querying data from SQL database or tables or tables or fields don't exist as questioned, True otherwise.")
-    shouldRunQuery: bool = Field(description="Set to True if user wants results from database/table or gives query to run. False if user only wants the query to be generated. Set to False if can't determine whether user wants to get results from database/table.")
+    shouldRunQuery: bool = Field(description="Set to True if user wants results from database/table or gives query to run. False if user only wants the query to be generated or query to be explained. Set to False if can't determine whether user wants to get results from database/table.")
     errorMessage: str = Field("Error message given by assistant  when user question not related to querying data or tries to modify data in tables")
 
+class QuestionClassificationResponse(BaseModel):
+    question: str = Field("User question to be classified")
+    isValidQuestion: bool = Field(description="False if question not related to querying data from SQL database or tables, True otherwise.")
+    shouldRunQuery: bool = Field(description="Set to True if user wants results from database/table or gives query to run. False if user only wants the query to be generated or query to be explained. Set to False if can't determine whether user wants to get results from database/table.")
+    errorMessage: str = Field("Error message given by assistant when user question not related to querying data or tries to modify data in tables")
+
+def classifyQuesValidity(question:str):
+    template = """
+    Consider the following question and classify whether the question is related to querying data from SQL databases or tables. Make sure the question does not modify data by creating, inserting, updating, deleting or dropping any table data. The question must not have triggers or change any permissions.
+    
+    Question: {question}
+    """
+    prompt = ChatPromptTemplate.from_template(template)
+    
+    try:
+        validatorResponse: QuestionClassificationResponse = client.chat.completions.create(
+        response_model=QuestionClassificationResponse,
+        messages=[{"role": "user", "content": prompt.format(question=question)}],
+        max_retries=1    
+        )
+        return validatorResponse
+    except Exception as e:
+        print("initial prompt:", prompt.format(question=question))
+        return QuestionClassificationResponse(
+            question=question,
+            isValidQuestion=False,
+            shouldRunQuery=False,
+            errorMessage="Unable to classsify the question with followig error-\n"+str(e)
+        )
 class MarkdownResponse:
-    def __init__(self, containsDataframe: bool, responseMessage:str, dataframe=None) -> None:
+    def __init__(self, containsDataframe: bool, responseMessage:str, dataframe=None, df_explanation=None) -> None:
         self.containsDatafame = containsDataframe
         self.dataframe = dataframe
         self.responseMessage = responseMessage
+        self.df_explanation = df_explanation
+    
+
+def explainDataframeOutput(dataframe: pd.DataFrame, question:str) -> str:
+    """
+    Generates a detailed explanation of the data contained in the given dataframe.
+
+    Parameters:
+    dataframe (pd.DataFrame): The dataframe to be explained.
+
+    Returns:
+    str: A detailed explanation of the dataframe's contents.
+    """
+    promptTemplate = """
+
+        I have the following SQL query result and I would like an explanation of the output:
+
+        SQL query result:
+        {dataframe}
+        
+        Refer to initial user question to understand the context of the query and the expected output
+        Question:
+        {question}
+        
+        Can you explain the meaning of this output, including the data columns and how they relate to the query? Please also provide insight into how the results are derived and any patterns or trends you observe in the data.
+        """
+    prompt = PromptTemplate(template=promptTemplate, input_variables=["dataframe", "question"])
+        
+    explain_chain = (
+            prompt |
+            llm |
+            StrOutputParser()
+        )
+    return explain_chain.invoke({"dataframe": dataframe.to_string(), "question":question}).strip()
     
 
 def queryRewrite(question:str)->str:
@@ -83,6 +146,7 @@ def explainQuery(question:str, query:str)->str:
         StrOutputParser()
     )
     return query_explain_chain.invoke({"question": question, "query": query}).strip()
+
 
 def format_schema_for_llm(table_name, schema):
     formatted_schema = f"Schema for table '{table_name}':\n"
@@ -128,7 +192,7 @@ def runQueryDf(query:str):
         return str(e)
     return df
 
-def generateFirstAnswer(conversation_history, db_client, user_question = "give info of all tables in the database"):
+def generateFirstAnswer(conversation_history, db_client, user_question = "give info of all tables in the database"):     
     print("question:", user_question)
     schema = get_schema(db_client=db_client)
     template = """Given the following Sqlite table schemas and example row data, generate an SQL query to answer the user's question. Ensure the query is correctly structured according to SQL syntax and that it is relevant to the provided tables and columns. The generated query will be validated for syntax and database relevance.
@@ -216,6 +280,15 @@ def getAssistantResponse(message):
     return {"role": "assistant", "content": message}
 
 def getLLMResponse(question:str):
+    
+    # classify question
+    classificationResponse = classifyQuesValidity(question=question)
+    shouldRunQuery = classificationResponse.shouldRunQuery
+    print("should run query:",classificationResponse.shouldRunQuery)
+    
+    if classificationResponse.isValidQuestion == False:
+        return getAssistantResponse(MarkdownResponse(containsDataframe=False, responseMessage=classificationResponse.errorMessage))
+        
     validatedResponse = generateFirstAnswer(conversation_history=conversation_history, db_client=db_client, user_question=question)
     print(validatedResponse.__dict__)
     sql_query = validatedResponse.query
@@ -229,11 +302,12 @@ def getLLMResponse(question:str):
         """
         markdown_response = MarkdownResponse(containsDataframe=False, responseMessage=error_message.strip())
         print(markdown_response)
-    elif validatedResponse.isValidResponse and validatedResponse.shouldRunQuery == False:
+    elif validatedResponse.isValidResponse and (shouldRunQuery == False):
         explanation:str = explainQuery(question=question, query=sql_query) # TODO: explain only when query works        
         resp = f"""
         Generated Query: `{sql_query}`
         
+        ### Explanation:
         {explanation}
         """
         markdown_response = MarkdownResponse(containsDataframe=False, responseMessage=resp.strip())
@@ -241,14 +315,16 @@ def getLLMResponse(question:str):
         try:
             df = pd.read_sql_query(sql_query, db_client)
             explanation:str = explainQuery(question=question, query=sql_query) 
+            df_explanation:str = explainDataframeOutput(dataframe=df, question=question) # TODO: explain only when query works
             # query run successfully, return the explanation and results)
                         
             resp = f"""
-            Generated Query: `{sql_query}`
+            ### Output Explanation:
+            {df_explanation}
             
-            {explanation}
+            Generated Query: `{sql_query}`
             """
-            markdown_response = MarkdownResponse(containsDataframe=True, responseMessage=resp.strip(), dataframe=df)
+            markdown_response = MarkdownResponse(containsDataframe=True, responseMessage=resp.strip(), dataframe=df, df_explanation=df_explanation)
         except Exception as e:
         # TODO: generate answer again considering error
             resp = f"""
