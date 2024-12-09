@@ -7,6 +7,7 @@ import instructor
 import google.generativeai as genai
 from typing import List
 import sqlite3
+import streamlit_authenticator as stauth
 
 
 # https://blog.streamlit.io/introducing-two-new-caching-commands-to-replace-st-cache/

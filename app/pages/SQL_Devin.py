@@ -15,6 +15,9 @@ st.set_page_config(
     page_icon="⚛️",
 )
 
+if "logged_in" not in st.session_state or st.session_state.logged_in == False:
+    st.switch_page("login.py")
+
 client,llm,conversation_history, db_client = None, None, None, None
 
 if "llm" not in st.session_state:
